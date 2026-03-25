@@ -1,4 +1,4 @@
-import { fetchSchedule } from "@/lib/api";
+import { fetchSchedule, type ScheduleEvent } from "@/lib/api";
 import Calendar from "@/components/Calendar";
 import Link from "next/link";
 
@@ -20,7 +20,7 @@ export default async function CalendarPage({ searchParams }: Props) {
     );
   }
 
-  let events = [];
+  let events: ScheduleEvent[] = [];
   let error = "";
   try {
     events = await fetchSchedule(group);

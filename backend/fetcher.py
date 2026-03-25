@@ -1,14 +1,18 @@
 """
 asobisystem 系グループのスケジュールページをスクレイピングして返す。
+cutiestreet / candytune / sweetsteady は X タイムラインも取得してマージする。
 DB 不要・オンデマンド取得。
 """
 import re
-import html as html_module
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+
+from x_fetcher import fetch_tweets
+from tweet_classifier import classify_tweet
+from date_extractor import extract_event_date
 
 HEADERS = {
     "User-Agent": (
@@ -19,16 +23,23 @@ HEADERS = {
 
 # 対応グループ（サブドメイン → 表示名）
 KNOWN_GROUPS: list[dict] = [
-    {"slug": "cutiestreet",  "name": "CUTIE STREET"},
-    {"slug": "candytune",    "name": "CANDY TUNE"},
-    {"slug": "sweetsteady",  "name": "SWEET STEADY"},
-    {"slug": "wasuta",       "name": "わーすた"},
-    {"slug": "ukka",         "name": "ukka"},
-    {"slug": "bromance",     "name": "BROMAnce"},
-    {"slug": "ocha-norma",   "name": "OCHA NORMA"},
-    {"slug": "fruits-zipper","name": "FRUITS ZIPPER"},
-    {"slug": "poipoipoizon", "name": "ぽいずん"},
+    {"slug": "cutiestreet",   "name": "CUTIE STREET"},
+    {"slug": "candytune",     "name": "CANDY TUNE"},
+    {"slug": "sweetsteady",   "name": "SWEET STEADY"},
+    {"slug": "wasuta",        "name": "わーすた"},
+    {"slug": "ukka",          "name": "ukka"},
+    {"slug": "bromance",      "name": "BROMAnce"},
+    {"slug": "ocha-norma",    "name": "OCHA NORMA"},
+    {"slug": "fruits-zipper", "name": "FRUITS ZIPPER"},
+    {"slug": "poipoipoizon",  "name": "ぽいずん"},
 ]
+
+# X アカウント対応表（slug → X username）
+_X_ACCOUNTS: dict[str, str] = {
+    "cutiestreet": "CUTIE_STREET_",
+    "candytune":   "CANDY_TUNE_",
+    "sweetsteady": "SWEET_STEADY",
+}
 
 _DATE_VAL_RE = re.compile(
     r"20\d{2}[-/\.]\d{1,2}[-/\.]\d{1,2}"
@@ -37,9 +48,7 @@ _DATE_VAL_RE = re.compile(
 )
 
 _SCHEDULE_DETAIL_RE = re.compile(r"/(live_information|news)/detail/")
-
 _SCHED_TYPE_RE = re.compile(r"\[[A-Z]{2,3}\]\s+(LIVE|EVENT|TV|RADIO|VIDEO)", re.IGNORECASE)
-
 _DATE_PARSE_RE = re.compile(r"(\d{2})\s+(\d{2})\s+\[[A-Z]{2,3}\]")
 
 
@@ -79,7 +88,6 @@ def _judge_category(post_text: str) -> str | None:
 
 
 def _parse_event_date(post_text: str, year: int, month: int) -> str | None:
-    """スケジュールテキスト（例: 03 21 [SAT]）から event_date (ISO) を抽出"""
     m = _DATE_PARSE_RE.search(post_text)
     if not m:
         return None
@@ -90,7 +98,7 @@ def _parse_event_date(post_text: str, year: int, month: int) -> str | None:
         return None
 
 
-def _fetch_from_url(url: str, base_url: str) -> list[dict]:
+def _fetch_web(url: str, base_url: str) -> list[dict]:
     try:
         resp = requests.get(url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
@@ -101,7 +109,6 @@ def _fetch_from_url(url: str, base_url: str) -> list[dict]:
     results = []
     seen: set[str] = set()
 
-    # URLから年月を取得（クエリパラメータから）
     year_m = re.search(r"year=(\d{4})", url)
     month_m = re.search(r"month=(\d{2})", url)
     now = datetime.now(timezone.utc)
@@ -125,13 +132,53 @@ def _fetch_from_url(url: str, base_url: str) -> list[dict]:
             continue
 
         event_date = _parse_event_date(post_text, year, month)
-
         results.append({
             "post_id": full_url,
             "post_text": post_text,
             "post_url": full_url,
             "category": category,
             "event_date": event_date,
+            "source": "web",
+        })
+
+    return results
+
+
+def _fetch_x_events(slug: str, web_events: list[dict]) -> list[dict]:
+    """X タイムラインを取得し、Webと重複しないイベントのみ返す。"""
+    username = _X_ACCOUNTS.get(slug)
+    if not username:
+        return []
+
+    tweets = fetch_tweets(username, days=60, max_results=50)
+    if not tweets:
+        return []
+
+    # Web イベントの（category, event_date）セットを重複チェック用に作成
+    web_keys: set[tuple[str, str]] = set()
+    for ev in web_events:
+        if ev["event_date"]:
+            web_keys.add((ev["category"], ev["event_date"]))
+
+    results = []
+    for tweet in tweets:
+        category = classify_tweet(tweet["post_text"])
+        if category is None:
+            continue
+
+        event_date = extract_event_date(tweet["post_text"])
+
+        # Web と同一（カテゴリ＋日付）なら重複スキップ
+        if event_date and (category, event_date) in web_keys:
+            continue
+
+        results.append({
+            "post_id": tweet["post_id"],
+            "post_text": tweet["post_text"],
+            "post_url": tweet["post_url"],
+            "category": category,
+            "event_date": event_date,
+            "source": "x",
         })
 
     return results
@@ -140,12 +187,11 @@ def _fetch_from_url(url: str, base_url: str) -> list[dict]:
 def fetch_schedule(group_slug: str) -> list[dict]:
     """
     指定グループのスケジュール（今月 + 翌月）を取得して返す。
-    group_slug: サブドメイン部分（例: "cutiestreet"）
+    cutiestreet / candytune / sweetsteady は X も取得してマージ。
     """
     base_url = f"https://{group_slug}.asobisystem.com"
     list_url = f"{base_url}/live_information/schedule/list/"
 
-    # サイト疎通確認
     try:
         resp = requests.get(list_url, headers=HEADERS, timeout=10)
         resp.raise_for_status()
@@ -161,13 +207,16 @@ def fetch_schedule(group_slug: str) -> list[dict]:
     this_month_url = f"{list_url}?viewMode=default&year={now.year}&month={now.month:02d}"
     next_month_url = f"{list_url}?viewMode=default&year={next_year}&month={next_month:02d}"
 
-    events: list[dict] = []
+    web_events: list[dict] = []
     seen_ids: set[str] = set()
 
     for url in [this_month_url, next_month_url]:
-        for ev in _fetch_from_url(url, base_url):
+        for ev in _fetch_web(url, base_url):
             if ev["post_id"] not in seen_ids:
                 seen_ids.add(ev["post_id"])
-                events.append(ev)
+                web_events.append(ev)
 
-    return events
+    # X イベントをマージ（対象グループのみ）
+    x_events = _fetch_x_events(group_slug, web_events)
+
+    return web_events + x_events

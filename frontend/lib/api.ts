@@ -15,7 +15,7 @@ export interface ScheduleEvent {
 
 export async function fetchGroups(): Promise<Group[]> {
   try {
-    const res = await fetch(`${BASE_URL}/groups`, { next: { revalidate: 3600 } });
+    const res = await fetch(`${BASE_URL}/groups`, { cache: "no-store" });
     if (!res.ok) return [];
     const data = await res.json();
     return data.groups;

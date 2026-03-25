@@ -1,8 +1,6 @@
 """
-asobisystem 系グループのスケジュールを返す。
-cutiestreet / candytune / sweetsteady は cutieStreet_app の PostgreSQL から取得。
-それ以外はスケジュールページをスクレイピング。
-DB 不要・オンデマンド取得。
+スケジュールデータをDBから取得して返す。
+設定外グループ（直接入力）はWebスクレイピングにフォールバック。
 """
 import os
 import re
@@ -13,12 +11,10 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-try:
-    import psycopg2
-    import psycopg2.extras
-    _PG_AVAILABLE = True
-except ImportError:
-    _PG_AVAILABLE = False
+import psycopg2
+import psycopg2.extras
+
+from groups_config import GROUPS, KNOWN_GROUPS, get_group
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
@@ -27,26 +23,6 @@ HEADERS = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
-}
-
-# 対応グループ（サブドメイン → 表示名）
-KNOWN_GROUPS: list[dict] = [
-    {"slug": "cutiestreet",   "name": "CUTIE STREET"},
-    {"slug": "candytune",     "name": "CANDY TUNE"},
-    {"slug": "sweetsteady",   "name": "SWEET STEADY"},
-    {"slug": "wasuta",        "name": "わーすた"},
-    {"slug": "ukka",          "name": "ukka"},
-    {"slug": "bromance",      "name": "BROMAnce"},
-    {"slug": "ocha-norma",    "name": "OCHA NORMA"},
-    {"slug": "fruits-zipper", "name": "FRUITS ZIPPER"},
-    {"slug": "poipoipoizon",  "name": "ぽいずん"},
-]
-
-# DB から取得するグループ（slug → DB の account 名）
-_DB_ACCOUNTS: dict[str, str] = {
-    "cutiestreet": "CUTIE_STREET_",
-    "candytune":   "CANDY_TUNE_",
-    "sweetsteady": "SWEET_STEADY",
 }
 
 # -----------------------------------------------------------------------
@@ -63,13 +39,10 @@ def _get_conn():
 
 
 def _fetch_from_db(account: str) -> list[dict]:
-    """cutieStreet_app の DB からイベントを取得する。"""
-    if not _PG_AVAILABLE or not DATABASE_URL:
+    if not DATABASE_URL:
         return []
-
     now = datetime.now(timezone.utc)
     month_start = f"{now.year}-{now.month:02d}-01"
-
     try:
         with _get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -91,7 +64,7 @@ def _fetch_from_db(account: str) -> list[dict]:
 
 
 # -----------------------------------------------------------------------
-# Web スクレイピング（DB 対象外グループ用）
+# Webスクレイピング（設定外グループ用フォールバック）
 # -----------------------------------------------------------------------
 
 _DATE_VAL_RE = re.compile(
@@ -107,7 +80,6 @@ _DATE_PARSE_RE = re.compile(r"(\d{2})\s+(\d{2})\s+\[[A-Z]{2,3}\]")
 def _judge_category(post_text: str) -> str | None:
     m = _SCHED_TYPE_RE.search(post_text)
     type_str = m.group(1).upper() if m else "EVENT"
-
     if type_str == "VIDEO":
         return None
     if type_str == "LIVE":
@@ -122,7 +94,6 @@ def _judge_category(post_text: str) -> str | None:
         return "テレビ出演"
     if type_str == "RADIO":
         return "ラジオ出演"
-
     if "大特典会" in post_text:
         return "大特典会"
     if any(kw in post_text for kw in ["オンラインサイン会", "オンラインサイン"]):
@@ -147,52 +118,8 @@ def _parse_event_date(post_text: str, year: int, month: int) -> str | None:
         return None
 
 
-def _fetch_web(url: str, base_url: str) -> list[dict]:
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-    except Exception:
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    results = []
-    seen: set[str] = set()
-
-    year_m = re.search(r"year=(\d{4})", url)
-    month_m = re.search(r"month=(\d{2})", url)
-    now = datetime.now(timezone.utc)
-    year = int(year_m.group(1)) if year_m else now.year
-    month = int(month_m.group(1)) if month_m else now.month
-
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if not _SCHEDULE_DETAIL_RE.search(href):
-            continue
-        post_text = a.get_text(separator=" ", strip=True)
-        if not post_text or not _DATE_VAL_RE.search(post_text):
-            continue
-        full_url = urljoin(base_url, href)
-        if full_url in seen:
-            continue
-        seen.add(full_url)
-
-        category = _judge_category(post_text)
-        if category is None:
-            continue
-
-        event_date = _parse_event_date(post_text, year, month)
-        results.append({
-            "post_id": full_url,
-            "post_text": post_text,
-            "post_url": full_url,
-            "category": category,
-            "event_date": event_date,
-        })
-
-    return results
-
-
-def _fetch_schedule_web(group_slug: str) -> list[dict]:
+def _fetch_web_fallback(group_slug: str) -> list[dict]:
+    """設定外グループ用: 公式サイトをスクレイピングして返す。"""
     base_url = f"https://{group_slug}.asobisystem.com"
     list_url = f"{base_url}/live_information/schedule/list/"
 
@@ -208,16 +135,45 @@ def _fetch_schedule_web(group_slug: str) -> list[dict]:
     else:
         next_year, next_month = now.year, now.month + 1
 
-    this_month_url = f"{list_url}?viewMode=default&year={now.year}&month={now.month:02d}"
-    next_month_url = f"{list_url}?viewMode=default&year={next_year}&month={next_month:02d}"
-
     events: list[dict] = []
     seen_ids: set[str] = set()
-    for url in [this_month_url, next_month_url]:
-        for ev in _fetch_web(url, base_url):
-            if ev["post_id"] not in seen_ids:
-                seen_ids.add(ev["post_id"])
-                events.append(ev)
+
+    for url in [
+        f"{list_url}?viewMode=default&year={now.year}&month={now.month:02d}",
+        f"{list_url}?viewMode=default&year={next_year}&month={next_month:02d}",
+    ]:
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+            resp.raise_for_status()
+        except Exception:
+            continue
+        soup = BeautifulSoup(resp.text, "html.parser")
+        year_m = re.search(r"year=(\d{4})", url)
+        month_m = re.search(r"month=(\d{2})", url)
+        y = int(year_m.group(1)) if year_m else now.year
+        mo = int(month_m.group(1)) if month_m else now.month
+        for a in soup.find_all("a", href=True):
+            href = a["href"]
+            if not _SCHEDULE_DETAIL_RE.search(href):
+                continue
+            post_text = a.get_text(separator=" ", strip=True)
+            if not post_text or not _DATE_VAL_RE.search(post_text):
+                continue
+            full_url = urljoin(url, href)
+            if full_url in seen_ids:
+                continue
+            seen_ids.add(full_url)
+            category = _judge_category(post_text)
+            if category is None:
+                continue
+            events.append({
+                "post_id": full_url,
+                "post_text": post_text,
+                "post_url": full_url,
+                "category": category,
+                "event_date": _parse_event_date(post_text, y, mo),
+            })
+
     return events
 
 
@@ -226,7 +182,8 @@ def _fetch_schedule_web(group_slug: str) -> list[dict]:
 # -----------------------------------------------------------------------
 
 def fetch_schedule(group_slug: str) -> list[dict]:
-    """指定グループのスケジュールを取得して返す。"""
-    if group_slug in _DB_ACCOUNTS:
-        return _fetch_from_db(_DB_ACCOUNTS[group_slug])
-    return _fetch_schedule_web(group_slug)
+    """指定グループのスケジュールを返す。設定済みグループはDB、未設定はWeb。"""
+    group = get_group(group_slug)
+    if group:
+        return _fetch_from_db(group["account"])
+    return _fetch_web_fallback(group_slug)

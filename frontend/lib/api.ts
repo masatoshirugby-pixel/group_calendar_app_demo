@@ -1,4 +1,5 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+// API_URL はサーバーサイド専用（ランタイムで読まれる）
+const BASE_URL = process.env.API_URL ?? "http://localhost:8000";
 
 export interface Group {
   slug: string;

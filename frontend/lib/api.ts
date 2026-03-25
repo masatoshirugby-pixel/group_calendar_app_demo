@@ -14,10 +14,14 @@ export interface ScheduleEvent {
 }
 
 export async function fetchGroups(): Promise<Group[]> {
-  const res = await fetch(`${BASE_URL}/groups`, { next: { revalidate: 3600 } });
-  if (!res.ok) return [];
-  const data = await res.json();
-  return data.groups;
+  try {
+    const res = await fetch(`${BASE_URL}/groups`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.groups;
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchSchedule(group: string): Promise<ScheduleEvent[]> {

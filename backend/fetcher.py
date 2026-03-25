@@ -1,18 +1,26 @@
 """
-asobisystem 系グループのスケジュールページをスクレイピングして返す。
-cutiestreet / candytune / sweetsteady は X タイムラインも取得してマージする。
+asobisystem 系グループのスケジュールを返す。
+cutiestreet / candytune / sweetsteady は cutieStreet_app の PostgreSQL から取得。
+それ以外はスケジュールページをスクレイピング。
 DB 不要・オンデマンド取得。
 """
+import os
 import re
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-from x_fetcher import fetch_tweets
-from tweet_classifier import classify_tweet
-from date_extractor import extract_event_date
+try:
+    import psycopg2
+    import psycopg2.extras
+    _PG_AVAILABLE = True
+except ImportError:
+    _PG_AVAILABLE = False
+
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 HEADERS = {
     "User-Agent": (
@@ -34,19 +42,63 @@ KNOWN_GROUPS: list[dict] = [
     {"slug": "poipoipoizon",  "name": "ぽいずん"},
 ]
 
-# X アカウント対応表（slug → X username）
-_X_ACCOUNTS: dict[str, str] = {
+# DB から取得するグループ（slug → DB の account 名）
+_DB_ACCOUNTS: dict[str, str] = {
     "cutiestreet": "CUTIE_STREET_",
     "candytune":   "CANDY_TUNE_",
     "sweetsteady": "SWEET_STEADY",
 }
+
+# -----------------------------------------------------------------------
+# DB 取得
+# -----------------------------------------------------------------------
+
+@contextmanager
+def _get_conn():
+    conn = psycopg2.connect(DATABASE_URL)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def _fetch_from_db(account: str) -> list[dict]:
+    """cutieStreet_app の DB からイベントを取得する。"""
+    if not _PG_AVAILABLE or not DATABASE_URL:
+        return []
+
+    now = datetime.now(timezone.utc)
+    month_start = f"{now.year}-{now.month:02d}-01"
+
+    try:
+        with _get_conn() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT post_id, post_text, post_url, category, event_date
+                    FROM events
+                    WHERE is_event = TRUE
+                      AND account = %s
+                      AND (event_date >= %s OR event_date IS NULL)
+                    ORDER BY event_date ASC NULLS LAST
+                    LIMIT 200
+                    """,
+                    (account, month_start),
+                )
+                return [dict(row) for row in cur.fetchall()]
+    except Exception:
+        return []
+
+
+# -----------------------------------------------------------------------
+# Web スクレイピング（DB 対象外グループ用）
+# -----------------------------------------------------------------------
 
 _DATE_VAL_RE = re.compile(
     r"20\d{2}[-/\.]\d{1,2}[-/\.]\d{1,2}"
     r"|(?<!\d)\d{1,2}[/月]\d{1,2}(?:\(.\))?"
     r"|\d{2}\s+\d{2}\s+\[[A-Z]{2,3}\]"
 )
-
 _SCHEDULE_DETAIL_RE = re.compile(r"/(live_information|news)/detail/")
 _SCHED_TYPE_RE = re.compile(r"\[[A-Z]{2,3}\]\s+(LIVE|EVENT|TV|RADIO|VIDEO)", re.IGNORECASE)
 _DATE_PARSE_RE = re.compile(r"(\d{2})\s+(\d{2})\s+\[[A-Z]{2,3}\]")
@@ -58,7 +110,6 @@ def _judge_category(post_text: str) -> str | None:
 
     if type_str == "VIDEO":
         return None
-
     if type_str == "LIVE":
         if any(kw in post_text for kw in ["ワンマン", "単独公演", "単独ライブ"]):
             return "単独ライブ"
@@ -67,13 +118,11 @@ def _judge_category(post_text: str) -> str | None:
         if any(kw in post_text for kw in ["対バン", "合同ライブ", "合同公演"]):
             return "合同ライブ"
         return "ライブ"
-
     if type_str == "TV":
         return "テレビ出演"
     if type_str == "RADIO":
         return "ラジオ出演"
 
-    # EVENT
     if "大特典会" in post_text:
         return "大特典会"
     if any(kw in post_text for kw in ["オンラインサイン会", "オンラインサイン"]):
@@ -138,57 +187,12 @@ def _fetch_web(url: str, base_url: str) -> list[dict]:
             "post_url": full_url,
             "category": category,
             "event_date": event_date,
-            "source": "web",
         })
 
     return results
 
 
-def _fetch_x_events(slug: str, web_events: list[dict]) -> list[dict]:
-    """X タイムラインを取得し、Webと重複しないイベントのみ返す。"""
-    username = _X_ACCOUNTS.get(slug)
-    if not username:
-        return []
-
-    tweets = fetch_tweets(username, days=60, max_results=50)
-    if not tweets:
-        return []
-
-    # Web イベントの（category, event_date）セットを重複チェック用に作成
-    web_keys: set[tuple[str, str]] = set()
-    for ev in web_events:
-        if ev["event_date"]:
-            web_keys.add((ev["category"], ev["event_date"]))
-
-    results = []
-    for tweet in tweets:
-        category = classify_tweet(tweet["post_text"])
-        if category is None:
-            continue
-
-        event_date = extract_event_date(tweet["post_text"])
-
-        # Web と同一（カテゴリ＋日付）なら重複スキップ
-        if event_date and (category, event_date) in web_keys:
-            continue
-
-        results.append({
-            "post_id": tweet["post_id"],
-            "post_text": tweet["post_text"],
-            "post_url": tweet["post_url"],
-            "category": category,
-            "event_date": event_date,
-            "source": "x",
-        })
-
-    return results
-
-
-def fetch_schedule(group_slug: str) -> list[dict]:
-    """
-    指定グループのスケジュール（今月 + 翌月）を取得して返す。
-    cutiestreet / candytune / sweetsteady は X も取得してマージ。
-    """
+def _fetch_schedule_web(group_slug: str) -> list[dict]:
     base_url = f"https://{group_slug}.asobisystem.com"
     list_url = f"{base_url}/live_information/schedule/list/"
 
@@ -207,16 +211,22 @@ def fetch_schedule(group_slug: str) -> list[dict]:
     this_month_url = f"{list_url}?viewMode=default&year={now.year}&month={now.month:02d}"
     next_month_url = f"{list_url}?viewMode=default&year={next_year}&month={next_month:02d}"
 
-    web_events: list[dict] = []
+    events: list[dict] = []
     seen_ids: set[str] = set()
-
     for url in [this_month_url, next_month_url]:
         for ev in _fetch_web(url, base_url):
             if ev["post_id"] not in seen_ids:
                 seen_ids.add(ev["post_id"])
-                web_events.append(ev)
+                events.append(ev)
+    return events
 
-    # X イベントをマージ（対象グループのみ）
-    x_events = _fetch_x_events(group_slug, web_events)
 
-    return web_events + x_events
+# -----------------------------------------------------------------------
+# 公開 API
+# -----------------------------------------------------------------------
+
+def fetch_schedule(group_slug: str) -> list[dict]:
+    """指定グループのスケジュールを取得して返す。"""
+    if group_slug in _DB_ACCOUNTS:
+        return _fetch_from_db(_DB_ACCOUNTS[group_slug])
+    return _fetch_schedule_web(group_slug)

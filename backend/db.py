@@ -190,6 +190,23 @@ def delete_web_events(account: str) -> int:
             return cur.rowcount
 
 
+def delete_stale_web_events(account: str, current_post_ids: list[str]) -> int:
+    """今回のスクレイプ結果に含まれない古い web イベントのみ削除。申込締切レコードは保持。"""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM events
+                WHERE account = %s
+                  AND source = 'web'
+                  AND category != '申込締切'
+                  AND post_id != ALL(%s)
+                """,
+                (account, current_post_ids),
+            )
+            return cur.rowcount
+
+
 def delete_expired_events() -> int:
     cutoff = (datetime.now(timezone.utc) - timedelta(days=EVENT_EXPIRY_DAYS)).date().isoformat()
     with get_conn() as conn:

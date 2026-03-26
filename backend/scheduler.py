@@ -204,11 +204,16 @@ def _save_tweet_data(tweets, account: str, source: str) -> int:
 def run_web_for_group(group: dict) -> int:
     account = group["account"]
     slug = group["slug"]
-    deleted = db.delete_web_events(account)
+    pages = web_fetcher.fetch_web_events(slug)
+    if not pages:
+        return 0
+    saved = _save_tweet_data(pages, account, source="web")
+    # 今回取得できなくなったイベント（公式サイトから消えたもの）を削除
+    current_ids = [p.post_id for p in pages]
+    deleted = db.delete_stale_web_events(account, current_ids)
     if deleted:
         logger.info(f"[web:{account}] 旧スケジュールイベント {deleted} 件を削除")
-    pages = web_fetcher.fetch_web_events(slug)
-    return _save_tweet_data(pages, account, source="web") if pages else 0
+    return saved
 
 
 def run_x_for_group(

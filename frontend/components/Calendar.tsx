@@ -54,7 +54,6 @@ function formatPostedAt(iso: string) {
 }
 
 function isNew(ev: ScheduleEvent): boolean {
-  if (ev.source !== "x") return false;
   if (!ev.created_at) return false;
   return Date.now() - new Date(ev.created_at).getTime() < 24 * 60 * 60 * 1000;
 }

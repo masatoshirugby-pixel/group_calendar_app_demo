@@ -36,6 +36,9 @@ export default async function CalendarPage({ searchParams }: Props) {
 
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* 左サイドバー */}
+      <GroupPanel currentGroup={group} />
+
       {/* メインエリア */}
       <main className="flex-1 overflow-y-auto px-4 py-8">
         {GROUP_HEADERS[group] && (
@@ -61,12 +64,9 @@ export default async function CalendarPage({ searchParams }: Props) {
             {error}
           </div>
         ) : (
-          <Calendar events={events} />
+          <Calendar key={group} events={events} />
         )}
       </main>
-
-      {/* 右サイドバー */}
-      <GroupPanel currentGroup={group} />
     </div>
   );
 }

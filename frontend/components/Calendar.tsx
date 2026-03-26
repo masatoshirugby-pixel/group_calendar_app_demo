@@ -43,6 +43,17 @@ function formatEventDate(iso: string) {
   });
 }
 
+function formatPostedAt(iso: string) {
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -137,6 +148,11 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
             {selected.event_date && (
               <p className="text-lg font-bold text-gray-800 mt-2">
                 {formatEventDate(selected.event_date)}
+              </p>
+            )}
+            {selected.posted_at && (
+              <p className="text-xs text-gray-400 mt-1">
+                投稿日時: {formatPostedAt(selected.posted_at)}
               </p>
             )}
             {selected.image_url && (

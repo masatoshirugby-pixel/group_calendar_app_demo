@@ -56,7 +56,7 @@ export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
   const availableToAdd = GROUPS.filter((g) => !selectedGroups.includes(g.slug));
 
   return (
-    <div className="w-52 shrink-0 border-l border-gray-100 bg-white flex flex-col h-full">
+    <div className="w-52 shrink-0 border-r border-gray-100 bg-white flex flex-col h-full">
       {/* グループ追加エリア */}
       <div className="p-3 border-b border-gray-100">
         <button

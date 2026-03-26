@@ -19,6 +19,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   配信イベント: "bg-green-400 text-white",
   "物販・グッズ": "bg-orange-400 text-white",
   その他イベント: "bg-gray-400 text-white",
+  申込締切: "bg-red-500 text-white",
 };
 
 const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];

@@ -23,15 +23,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   申込締切: "bg-red-500 text-white",
 };
 
-const WEEKDAYS = ["月", "火", "水", "木", "金", "土", "日"];
+const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 
 function getFirstWeekday(year: number, month: number) {
-  const d = new Date(year, month, 1).getDay();
-  return d === 0 ? 6 : d - 1;
+  return new Date(year, month, 1).getDay();
 }
 
 function formatEventDate(iso: string) {
@@ -100,7 +99,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
 
         <div className="grid grid-cols-7 mb-1">
           {WEEKDAYS.map((d, i) => (
-            <div key={d} className={`text-center text-xs font-semibold py-1 ${i === 5 ? "text-blue-500" : i === 6 ? "text-red-500" : "text-gray-500"}`}>
+            <div key={d} className={`text-center text-xs font-semibold py-1 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-gray-500"}`}>
               {d}
             </div>
           ))}

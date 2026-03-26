@@ -48,7 +48,7 @@ def _fetch_from_db(account: str) -> list[dict]:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    SELECT post_id, post_text, post_url, category, event_date, image_url, source, posted_at
+                    SELECT post_id, post_text, post_url, category, event_date, image_url, source, posted_at, created_at
                     FROM events
                     WHERE is_event = TRUE
                       AND account = %s
@@ -175,6 +175,7 @@ def _fetch_web_fallback(group_slug: str) -> list[dict]:
                 "image_url": None,
                 "source": "web",
                 "posted_at": None,
+                "created_at": None,
             })
 
     return events

@@ -17,7 +17,7 @@ from groups_config import GROUPS
 
 logger = logging.getLogger(__name__)
 
-FETCH_HOUR = 8  # 毎日 08:00 UTC に取得
+FETCH_HOUR = 13  # 毎日 13:00 UTC（22:00 JST）に取得
 
 # -----------------------------------------------------------------------
 # スケジュールページ用カテゴリ判定

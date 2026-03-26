@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { GROUPS } from "@/lib/api";
 
 export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
@@ -104,6 +105,7 @@ export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
 
       {/* 選択中グループ一覧 */}
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
+
         {selectedGroups.map((slug) => {
           const group = GROUPS.find((g) => g.slug === slug);
           const name = group?.name ?? slug;
@@ -133,6 +135,13 @@ export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
             </div>
           );
         })}
+      </div>
+
+      {/* フッター */}
+      <div className="p-3 border-t border-gray-100">
+        <Link href="/howto" className="text-xs text-gray-400 hover:text-gray-600">
+          使い方
+        </Link>
       </div>
     </div>
   );

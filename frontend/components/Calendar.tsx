@@ -53,12 +53,31 @@ function formatPostedAt(iso: string) {
   });
 }
 
+function isNew(createdAt: string | null): boolean {
+  if (!createdAt) return false;
+  return Date.now() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
+}
+
+function daysUntil(dateStr: string): number {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(dateStr + "T00:00:00");
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selected, setSelected] = useState<ScheduleEvent | null>(null);
   const [undatedOpen, setUndatedOpen] = useState(false);
+
+  // 申込締切が7日以内に迫っているイベント
+  const upcomingDeadlines = events
+    .filter((ev) => ev.category === "申込締切" && ev.event_date)
+    .map((ev) => ({ ev, days: daysUntil(ev.event_date!) }))
+    .filter(({ days }) => days >= 0 && days <= 7)
+    .sort((a, b) => a.days - b.days);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstWeekday = getFirstWeekday(year, month);
@@ -92,6 +111,28 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
     <div className="flex flex-col lg:flex-row gap-4">
       {/* カレンダー本体 */}
       <div className="flex-1">
+
+        {/* 申込締切バナー */}
+        {upcomingDeadlines.length > 0 && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3">
+            <p className="text-xs font-bold text-red-600 mb-2">⏰ 申込締切が迫っています</p>
+            <div className="flex flex-col gap-1.5">
+              {upcomingDeadlines.map(({ ev, days }) => (
+                <button
+                  key={ev.post_id}
+                  onClick={() => setSelected(ev)}
+                  className={`flex items-center gap-2 text-left px-3 py-1.5 rounded-lg bg-white border ${selected?.post_id === ev.post_id ? "border-red-400" : "border-red-100"} hover:border-red-300 transition-colors`}
+                >
+                  <span className={`shrink-0 text-xs font-bold px-1.5 py-0.5 rounded ${days === 0 ? "bg-red-500 text-white" : days <= 2 ? "bg-orange-400 text-white" : "bg-yellow-400 text-gray-800"}`}>
+                    {days === 0 ? "本日" : `あと${days}日`}
+                  </span>
+                  <span className="text-xs text-gray-700 truncate">{ev.post_text.slice(0, 50)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-4">
           <button onClick={prevMonth} className="px-3 py-1 rounded hover:bg-gray-100 text-lg">◀</button>
           <h2 className="text-xl font-bold text-gray-700">{year}年{month + 1}月</h2>
@@ -120,9 +161,9 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                     <button
                       key={ev.post_id}
                       onClick={() => setSelected(ev)}
-                      className={`text-left text-xs px-1 py-0.5 rounded truncate w-full ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""}`}
+                      className={`text-left text-xs px-1 py-0.5 rounded truncate w-full ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""} ${isNew(ev.created_at) ? "ring-2 ring-yellow-300 ring-offset-1" : ""}`}
                     >
-                      {ev.category}
+                      {isNew(ev.created_at) && <span className="mr-0.5">★</span>}{ev.category}
                     </button>
                   ))}
                 </div>
@@ -151,6 +192,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                     onClick={() => setSelected(ev)}
                     className={`text-left px-3 py-2 rounded-lg text-sm ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""}`}
                   >
+                    {isNew(ev.created_at) && <span className="mr-1 text-yellow-200 font-bold">★NEW</span>}
                     {ev.category} — {ev.post_text.slice(0, 40)}…
                   </button>
                 ))}
@@ -164,9 +206,14 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
       <div className="w-full lg:w-72 shrink-0">
         {selected ? (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 sticky top-4">
-            <span className={`text-xs font-bold px-2 py-1 rounded-full ${CATEGORY_COLORS[selected.category] ?? CATEGORY_COLORS["その他イベント"]}`}>
-              {selected.category}
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-xs font-bold px-2 py-1 rounded-full ${CATEGORY_COLORS[selected.category] ?? CATEGORY_COLORS["その他イベント"]}`}>
+                {selected.category}
+              </span>
+              {isNew(selected.created_at) && (
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-yellow-400 text-gray-800">★ NEW</span>
+              )}
+            </div>
             {selected.event_date && (
               <p className="text-lg font-bold text-gray-800 mt-2">
                 {formatEventDate(selected.event_date)}

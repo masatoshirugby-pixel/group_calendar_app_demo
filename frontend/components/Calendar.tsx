@@ -58,6 +58,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selected, setSelected] = useState<ScheduleEvent | null>(null);
+  const [undatedOpen, setUndatedOpen] = useState(false);
 
   const daysInMonth = getDaysInMonth(year, month);
   const firstWeekday = getFirstWeekday(year, month);
@@ -131,8 +132,30 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
         </div>
 
         {undatedEvents.length > 0 && (
-          <div className="mt-4 text-xs text-gray-400">
-            日程未確定: {undatedEvents.length}件
+          <div className="mt-6">
+            <button
+              onClick={() => setUndatedOpen((o) => !o)}
+              className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-gray-700 w-full text-left"
+            >
+              <span className={`transition-transform duration-200 ${undatedOpen ? "rotate-90" : ""}`}>▶</span>
+              日程未確定
+              <span className="ml-1 text-xs bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
+                {undatedEvents.length}
+              </span>
+            </button>
+            {undatedOpen && (
+              <div className="flex flex-col gap-2 mt-2">
+                {undatedEvents.map((ev) => (
+                  <button
+                    key={ev.post_id}
+                    onClick={() => setSelected(ev)}
+                    className={`text-left px-3 py-2 rounded-lg text-sm ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""}`}
+                  >
+                    {ev.category} — {ev.post_text.slice(0, 40)}…
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -73,7 +73,7 @@ def fetch_web_events(slug: str) -> list[TweetData]:
             results.append(TweetData(
                 post_id=full_url,
                 post_text=post_text,
-                posted_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                posted_at="",  # 公式サイトには投稿日時なし
                 image_url=None,
             ))
 

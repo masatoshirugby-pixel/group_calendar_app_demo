@@ -113,8 +113,7 @@ def _save_tweet_data(tweets, account: str, source: str) -> int:
 
     for tweet in tweets:
         if db.is_post_exists(tweet.post_id):
-            if source != "web":
-                _ensure_deadline_record(tweet, account, source)
+            _ensure_deadline_record(tweet, account, source)
             continue
 
         if source == "web":
@@ -170,31 +169,30 @@ def _save_tweet_data(tweets, account: str, source: str) -> int:
             })
             logger.info(f"[{source}:{account}] 保存: {tweet.post_id} [{judgement.category}] event_date={event_date_str}")
 
-            if source != "web":
-                for idx, (label, deadline_date) in enumerate(extract_deadline_dates(tweet.post_text)):
-                    if deadline_date == event_date:
-                        continue
-                    if event_date and deadline_date >= event_date:
-                        continue
-                    suffix = "_deadline" if idx == 0 else f"_deadline_{idx}"
-                    deadline_id = f"{tweet.post_id}{suffix}"
-                    if not db.is_post_exists(deadline_id):
-                        deadline_record = EventRecord(
-                            post_id=deadline_id,
-                            post_text=tweet.post_text,
-                            post_url=post_url,
-                            posted_at=tweet.posted_at,
-                            is_event=True,
-                            account=account,
-                            category="申込締切",
-                            event_date=deadline_date.isoformat(),
-                            venue=label,
-                            image_url=None,
-                            source=source,
-                            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-                        )
-                        if db.save_event(deadline_record):
-                            logger.info(f"[{source}:{account}] 申込締切保存: {deadline_id} label={label} deadline={deadline_date}")
+            for idx, (label, deadline_date) in enumerate(extract_deadline_dates(tweet.post_text)):
+                if deadline_date == event_date:
+                    continue
+                if event_date and deadline_date >= event_date:
+                    continue
+                suffix = "_deadline" if idx == 0 else f"_deadline_{idx}"
+                deadline_id = f"{tweet.post_id}{suffix}"
+                if not db.is_post_exists(deadline_id):
+                    deadline_record = EventRecord(
+                        post_id=deadline_id,
+                        post_text=tweet.post_text,
+                        post_url=post_url,
+                        posted_at=tweet.posted_at,
+                        is_event=True,
+                        account=account,
+                        category="申込締切",
+                        event_date=deadline_date.isoformat(),
+                        venue=label,
+                        image_url=None,
+                        source=source,
+                        created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                    )
+                    if db.save_event(deadline_record):
+                        logger.info(f"[{source}:{account}] 申込締切保存: {deadline_id} label={label} deadline={deadline_date}")
 
     return saved
 

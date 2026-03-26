@@ -126,17 +126,26 @@ def extract_event_date(text: str) -> date | None:
     """
     イベント日付を返す。
     1. 開催日程・日時などのキーワード周辺から文脈的に抽出（ニュース記事の公開日ノイズ対策）
-    2. タイトル部分（冒頭200文字）
-    3. 全文から最初の日付
+    2. タイトル部分（冒頭200文字）から申込締切日を除いた最初の日付
+    3. 全文から申込締切日を除いた最初の日付
+    ※ 締切日が先に登場しても開催日を誤判定しないよう締切日候補を除外する
     """
     contextual = _extract_contextual_event_date(text)
     if contextual:
         return contextual
 
+    deadline_dates = {d for _, d in extract_deadline_dates(text)}
+
     head_dates = extract_event_dates(text[:200])
-    if head_dates:
-        return head_dates[0]
+    non_deadline_head = [d for d in head_dates if d not in deadline_dates]
+    if non_deadline_head:
+        return non_deadline_head[0]
+
     dates = extract_event_dates(text)
+    non_deadline = [d for d in dates if d not in deadline_dates]
+    if non_deadline:
+        return non_deadline[0]
+    # 締切日以外の日付が取れない場合は最初の日付にフォールバック
     return dates[0] if dates else None
 
 

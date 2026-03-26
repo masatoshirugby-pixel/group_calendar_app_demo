@@ -53,9 +53,10 @@ function formatPostedAt(iso: string) {
   });
 }
 
-function isNew(createdAt: string | null): boolean {
-  if (!createdAt) return false;
-  return Date.now() - new Date(createdAt).getTime() < 24 * 60 * 60 * 1000;
+function isNew(ev: ScheduleEvent): boolean {
+  if (ev.source !== "x") return false;
+  if (!ev.created_at) return false;
+  return Date.now() - new Date(ev.created_at).getTime() < 24 * 60 * 60 * 1000;
 }
 
 function daysUntil(dateStr: string): number {
@@ -161,9 +162,9 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                     <button
                       key={ev.post_id}
                       onClick={() => setSelected(ev)}
-                      className={`text-left text-xs px-1 py-0.5 rounded truncate w-full ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""} ${isNew(ev.created_at) ? "ring-2 ring-yellow-300 ring-offset-1" : ""}`}
+                      className={`text-left text-xs px-1 py-0.5 rounded truncate w-full ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""} ${isNew(ev) ? "ring-2 ring-yellow-300 ring-offset-1" : ""}`}
                     >
-                      {isNew(ev.created_at) && <span className="mr-0.5">★</span>}{ev.category}
+                      {isNew(ev) && <span className="mr-0.5">★</span>}{ev.category}
                     </button>
                   ))}
                 </div>
@@ -192,7 +193,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                     onClick={() => setSelected(ev)}
                     className={`text-left px-3 py-2 rounded-lg text-sm ${CATEGORY_COLORS[ev.category] ?? CATEGORY_COLORS["その他イベント"]} ${selected?.post_id === ev.post_id ? "ring-2 ring-offset-1 ring-gray-400" : ""}`}
                   >
-                    {isNew(ev.created_at) && <span className="mr-1 text-yellow-200 font-bold">★NEW</span>}
+                    {isNew(ev) && <span className="mr-1 text-yellow-200 font-bold">★NEW</span>}
                     {ev.category} — {ev.post_text.slice(0, 40)}…
                   </button>
                 ))}
@@ -210,7 +211,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
               <span className={`text-xs font-bold px-2 py-1 rounded-full ${CATEGORY_COLORS[selected.category] ?? CATEGORY_COLORS["その他イベント"]}`}>
                 {selected.category}
               </span>
-              {isNew(selected.created_at) && (
+              {isNew(selected) && (
                 <span className="text-xs font-bold px-2 py-1 rounded-full bg-yellow-400 text-gray-800">★ NEW</span>
               )}
             </div>

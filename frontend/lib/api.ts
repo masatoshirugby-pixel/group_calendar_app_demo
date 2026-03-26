@@ -12,6 +12,8 @@ export interface ScheduleEvent {
   post_url: string;
   category: string;
   event_date: string | null;
+  image_url: string | null;
+  source: string | null;
 }
 
 // グループ一覧はフロントエンドに直接定義（バックエンドとの同期不要）

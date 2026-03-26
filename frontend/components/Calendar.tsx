@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import type { ScheduleEvent } from "@/lib/api";
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -138,6 +139,16 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                 {formatEventDate(selected.event_date)}
               </p>
             )}
+            {selected.image_url && (
+              <div className="mt-3 relative w-full aspect-video rounded-lg overflow-hidden">
+                <Image
+                  src={selected.image_url}
+                  alt="イベント画像"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+            )}
             <div className="mt-3 p-3 bg-gray-50 rounded-lg">
               <p className="text-xs text-gray-500 leading-relaxed whitespace-pre-wrap">
                 {selected.post_text}
@@ -146,7 +157,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
             {selected.post_url && (
               <a href={selected.post_url} target="_blank" rel="noopener noreferrer"
                 className="inline-block mt-3 text-xs text-blue-500 hover:text-blue-700 underline">
-                🌐 公式ページを見る →
+                {selected.source === "x" ? "𝕏 元の投稿を見る →" : "🌐 公式ページを見る →"}
               </a>
             )}
           </div>

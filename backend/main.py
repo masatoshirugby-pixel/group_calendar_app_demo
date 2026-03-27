@@ -43,6 +43,12 @@ def health():
     return {"status": "ok"}
 
 
+@app.get("/status")
+def get_status():
+    """最終パイプライン実行時刻を返す"""
+    return {"last_pipeline_run": scheduler.get_last_run_time()}
+
+
 @app.get("/groups")
 def get_groups():
     return {"groups": KNOWN_GROUPS}

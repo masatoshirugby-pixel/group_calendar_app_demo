@@ -35,6 +35,17 @@ export async function fetchGroups(): Promise<Group[]> {
   return GROUPS;
 }
 
+export async function fetchLastUpdated(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/status`, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.last_pipeline_run ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchSchedule(group: string): Promise<ScheduleEvent[]> {
   const res = await fetch(`${BASE_URL}/schedule?group=${encodeURIComponent(group)}`, {
     cache: "no-store",

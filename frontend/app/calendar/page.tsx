@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { fetchSchedule, type ScheduleEvent, GROUPS } from "@/lib/api";
+import { fetchSchedule, fetchLastUpdated, type ScheduleEvent, GROUPS } from "@/lib/api";
 import Calendar from "@/components/Calendar";
 import GroupPanel from "@/components/GroupPanel";
 
@@ -8,6 +8,16 @@ const GROUP_HEADERS: Record<string, string> = {
   sweetsteady: "https://d1rjcmiyngzjnh.cloudfront.net/prod/public/fcopen/contents/top_image/1217/82eb2c3a913dd9c6b552ea68418be46c.jpeg",
   candytune:   "https://d1rjcmiyngzjnh.cloudfront.net/prod/public/fcopen/contents/top_image/666/9a02cefd0e75e34e6a0f4a101c7111a3.jpeg",
 };
+
+function formatLastUpdated(iso: string): string {
+  return new Date(iso).toLocaleString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 interface Props {
   searchParams: Promise<{ group?: string }>;
@@ -32,15 +42,16 @@ export default async function CalendarPage({ searchParams }: Props) {
     error = e.message ?? "取得失敗";
   }
 
+  const lastUpdated = await fetchLastUpdated();
   const groupName = GROUPS.find((g) => g.slug === group)?.name ?? group;
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* 左サイドバー */}
+    <div className="h-screen overflow-hidden">
+      {/* ドロワーパネル（fixed overlay） */}
       <GroupPanel currentGroup={group} />
 
-      {/* メインエリア */}
-      <main className="flex-1 overflow-y-auto px-4 py-8">
+      {/* メインエリア：左側のハンバーガーボタン分だけ padding */}
+      <main className="h-full overflow-y-auto pl-10 pr-4 py-8">
         {GROUP_HEADERS[group] && (
           <div className="relative w-full h-32 rounded-xl overflow-hidden mb-4">
             <Image
@@ -52,12 +63,17 @@ export default async function CalendarPage({ searchParams }: Props) {
             />
           </div>
         )}
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 mb-1">
           <h1 className="text-2xl font-bold text-gray-800">{groupName}</h1>
           <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
             {events.length} 件
           </span>
         </div>
+        {lastUpdated && (
+          <p className="text-xs text-gray-400 mb-6">
+            最終更新: {formatLastUpdated(lastUpdated)}
+          </p>
+        )}
 
         {error ? (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600 text-sm">

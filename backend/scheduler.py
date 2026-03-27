@@ -19,6 +19,17 @@ logger = logging.getLogger(__name__)
 
 FETCH_HOUR = 13  # 毎日 13:00 UTC（22:00 JST）に取得
 
+_last_pipeline_run: str | None = None
+
+
+def get_last_run_time() -> str | None:
+    return _last_pipeline_run
+
+
+def _record_run_time() -> None:
+    global _last_pipeline_run
+    _last_pipeline_run = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 # -----------------------------------------------------------------------
 # スケジュールページ用カテゴリ判定
 # -----------------------------------------------------------------------
@@ -349,6 +360,7 @@ def run_web_pipeline() -> int:
     if deleted:
         logger.info(f"期限切れイベント {deleted} 件を削除しました")
     logger.info(f"[web pipeline] 合計 {total} 件保存")
+    _record_run_time()
     return total
 
 
@@ -367,6 +379,7 @@ def run_pipeline(
         logger.info(f"期限切れイベント {deleted} 件を削除しました")
 
     logger.info(f"パイプライン完了: 合計 {total} 件保存")
+    _record_run_time()
     return total
 
 

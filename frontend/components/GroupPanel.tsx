@@ -58,54 +58,8 @@ export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
 
   return (
     <div className="w-52 shrink-0 border-r border-gray-100 bg-white flex flex-col h-full">
-      {/* グループ追加エリア */}
-      <div className="p-3 border-b border-gray-100">
-        <button
-          onClick={() => setShowAdd((v) => !v)}
-          className="w-full text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 py-1"
-        >
-          <span className="text-base font-light">＋</span>
-          <span>グループを追加</span>
-        </button>
-
-        {showAdd && (
-          <div className="mt-2 flex flex-col gap-2">
-            {availableToAdd.length > 0 && (
-              <select
-                value={addSlug}
-                onChange={(e) => setAddSlug(e.target.value)}
-                className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700"
-              >
-                <option value="">一覧から選択...</option>
-                {availableToAdd.map((g) => (
-                  <option key={g.slug} value={g.slug}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <input
-              type="text"
-              value={customInput}
-              onChange={(e) => setCustomInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addGroup(customInput)}
-              placeholder="サブドメインを入力..."
-              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700"
-            />
-            <button
-              onClick={() => addGroup(addSlug || customInput)}
-              disabled={!addSlug && !customInput.trim()}
-              className="w-full bg-gray-800 text-white text-xs py-1.5 rounded disabled:opacity-40 hover:bg-gray-700"
-            >
-              追加
-            </button>
-          </div>
-        )}
-      </div>
-
       {/* 選択中グループ一覧 */}
       <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-1">
-
         {selectedGroups.map((slug) => {
           const group = GROUPS.find((g) => g.slug === slug);
           const name = group?.name ?? slug;
@@ -137,11 +91,58 @@ export default function GroupPanel({ currentGroup }: { currentGroup: string }) {
         })}
       </div>
 
+      {/* グループ追加フォーム（展開時のみ表示） */}
+      {showAdd && (
+        <div className="border-t border-gray-100 p-3 flex flex-col gap-2">
+          {availableToAdd.length > 0 && (
+            <select
+              value={addSlug}
+              onChange={(e) => setAddSlug(e.target.value)}
+              className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700"
+            >
+              <option value="">一覧から選択...</option>
+              {availableToAdd.map((g) => (
+                <option key={g.slug} value={g.slug}>
+                  {g.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <input
+            type="text"
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addGroup(customInput)}
+            placeholder="サブドメインを入力..."
+            className="w-full border border-gray-200 rounded px-2 py-1.5 text-xs text-gray-700"
+            autoFocus
+          />
+          <button
+            onClick={() => addGroup(addSlug || customInput)}
+            disabled={!addSlug && !customInput.trim()}
+            className="w-full bg-gray-800 text-white text-xs py-1.5 rounded disabled:opacity-40 hover:bg-gray-700"
+          >
+            追加
+          </button>
+        </div>
+      )}
+
       {/* フッター */}
-      <div className="p-3 border-t border-gray-100">
+      <div className="p-3 border-t border-gray-100 flex items-center justify-between">
         <Link href="/howto" className="text-xs text-gray-400 hover:text-gray-600">
           使い方
         </Link>
+        <button
+          onClick={() => setShowAdd((v) => !v)}
+          title="グループを追加"
+          className={`w-6 h-6 rounded-full flex items-center justify-center text-sm transition-colors ${
+            showAdd
+              ? "bg-gray-800 text-white"
+              : "text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+          }`}
+        >
+          {showAdd ? "×" : "＋"}
+        </button>
       </div>
     </div>
   );

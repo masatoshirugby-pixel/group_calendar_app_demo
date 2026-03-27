@@ -93,3 +93,22 @@ async def manual_deadline_backfill():
     except Exception as e:
         logger.error(f"/fetch/deadlines エラー: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/admin/reclassify")
+async def reclassify_event_dates(
+    account: str = Query(default=None, description="対象アカウント名 (例: CANDY_TUNE_)。省略時は全グループ対象"),
+):
+    """
+    既存のX投稿イベントの event_date を再分類して更新する。
+    修正済みロジック（申込締切日を開催日と誤判定しない）を既存レコードに適用したいときに使う。
+    """
+    try:
+        result = await asyncio.to_thread(scheduler.run_reclassify, account)
+        return {
+            "message": f"{result['checked']} 件確認、{result['updated']} 件の開催日を更新しました",
+            **result,
+        }
+    except Exception as e:
+        logger.error(f"/admin/reclassify エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

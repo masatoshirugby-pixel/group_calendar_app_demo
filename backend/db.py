@@ -190,6 +190,32 @@ def delete_web_events(account: str) -> int:
             return cur.rowcount
 
 
+def get_x_events_for_reclassify(account: str) -> list[dict]:
+    """再分類用: 指定アカウントのX投稿イベントを全件返す"""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT post_id, post_text, event_date
+                FROM events
+                WHERE account = %s AND source = 'x' AND is_event = TRUE
+                """,
+                (account,),
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+
+def update_event_date(post_id: str, event_date: Optional[str]) -> bool:
+    """event_date を更新する（再分類用）"""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE events SET event_date = %s WHERE post_id = %s",
+                (event_date, post_id),
+            )
+            return cur.rowcount > 0
+
+
 def delete_stale_web_events(account: str, current_post_ids: list[str]) -> int:
     """今回のスクレイプ結果に含まれない古い web イベントのみ削除。申込締切レコードは保持。"""
     with get_conn() as conn:

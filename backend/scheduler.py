@@ -301,6 +301,41 @@ def run_deadline_backfill() -> int:
 
 
 # -----------------------------------------------------------------------
+# 開催日再分類
+# -----------------------------------------------------------------------
+
+def run_reclassify(account: str | None = None) -> dict:
+    """
+    既存のXイベントレコードに対して event_date を再分類し、
+    変わったものだけ DB を更新する。
+    account を指定すると対象アカウントのみ処理。
+    """
+    from groups_config import GROUPS as ALL_GROUPS
+    targets = [g for g in ALL_GROUPS if not account or g["account"] == account]
+    total_checked = 0
+    total_updated = 0
+
+    for group in targets:
+        rows = db.get_x_events_for_reclassify(group["account"])
+        for row in rows:
+            total_checked += 1
+            new_date = extract_event_date(row["post_text"])
+            new_date_str = new_date.isoformat() if new_date else None
+            old_date_str = row["event_date"]
+            if new_date_str == old_date_str:
+                continue
+            if db.update_event_date(row["post_id"], new_date_str):
+                total_updated += 1
+                logger.info(
+                    f"[reclassify:{group['account']}] {row['post_id']}: "
+                    f"{old_date_str} → {new_date_str}"
+                )
+
+    logger.info(f"[reclassify] {total_checked} 件確認 / {total_updated} 件更新")
+    return {"checked": total_checked, "updated": total_updated}
+
+
+# -----------------------------------------------------------------------
 # 全体パイプライン
 # -----------------------------------------------------------------------
 

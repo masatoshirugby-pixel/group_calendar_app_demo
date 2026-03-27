@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import type { ScheduleEvent } from "@/lib/api";
 
@@ -22,6 +22,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   その他イベント: "bg-gray-400 text-white",
   申込締切: "bg-red-500 text-white",
 };
+
+const FILTER_CATEGORIES = [
+  "単独ライブ", "ライブ", "合同ライブ", "フェス出演",
+  "大特典会", "特典会", "オンラインサイン会", "リリースイベント",
+  "テレビ出演", "ラジオ出演", "雑誌掲載", "その他メディア",
+  "配信イベント", "物販・グッズ", "その他イベント", "申込締切",
+];
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -71,6 +78,44 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const [month, setMonth] = useState(today.getMonth());
   const [selected, setSelected] = useState<ScheduleEvent | null>(null);
   const [undatedOpen, setUndatedOpen] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  function toggleCategory(cat: string) {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
+
+  const isFiltered = selectedCategories.size > 0;
+
+  // 絞り込み後のイベント
+  const displayEvents = isFiltered
+    ? events.filter((e) => {
+        if (selectedCategories.has(e.category ?? "")) return true;
+        // 申込締切が選択されている場合、その親イベントも表示
+        if (selectedCategories.has("申込締切") && e.category !== "申込締切") {
+          return events.some(
+            (d) => d.category === "申込締切" && d.post_id.startsWith(e.post_id + "_deadline")
+          );
+        }
+        return false;
+      })
+    : events;
 
   // 申込締切が7日以内に迫っているイベント
   const upcomingDeadlines = events
@@ -83,7 +128,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const firstWeekday = getFirstWeekday(year, month);
 
   const eventsByDate: Record<string, ScheduleEvent[]> = {};
-  for (const ev of events) {
+  for (const ev of displayEvents) {
     if (!ev.event_date) continue;
     const d = new Date(ev.event_date + "T00:00:00");
     if (d.getFullYear() === year && d.getMonth() === month) {
@@ -93,7 +138,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
     }
   }
 
-  const undatedEvents = events.filter((e) => !e.event_date);
+  const undatedEvents = displayEvents.filter((e) => !e.event_date);
 
   function prevMonth() {
     if (month === 0) { setYear((y) => y - 1); setMonth(11); }
@@ -132,6 +177,71 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
             </div>
           </div>
         )}
+
+        {/* 絞り込みUI */}
+        <div className="flex items-center gap-2 mb-3 flex-wrap" ref={dropdownRef}>
+          <div className="relative">
+            <button
+              onClick={() => setDropdownOpen((v) => !v)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                isFiltered
+                  ? "bg-gray-700 text-white border-gray-700"
+                  : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"
+              }`}
+            >
+              <span>絞り込み</span>
+              {isFiltered && (
+                <span className="bg-white text-gray-800 rounded-full px-1.5 leading-tight">
+                  {selectedCategories.size}
+                </span>
+              )}
+              <span className="text-gray-400">{dropdownOpen ? "▲" : "▼"}</span>
+            </button>
+
+            {dropdownOpen && (
+              <div className="absolute left-0 top-9 z-50 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-hidden">
+                {FILTER_CATEGORIES.map((cat) => {
+                  const checked = selectedCategories.has(cat);
+                  const colorClass = (CATEGORY_COLORS[cat] ?? CATEGORY_COLORS["その他イベント"]).split(" ")[0];
+                  return (
+                    <label key={cat} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCategory(cat)}
+                        className="w-3.5 h-3.5 accent-gray-700"
+                      />
+                      <span className={`inline-block w-2 h-2 rounded-full ${colorClass}`} />
+                      <span className="text-xs text-gray-700">{cat}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {isFiltered && (
+            <button
+              onClick={() => setSelectedCategories(new Set())}
+              className="text-xs text-gray-400 hover:text-gray-600 underline"
+            >
+              クリア
+            </button>
+          )}
+
+          {isFiltered && (
+            <div className="flex flex-wrap gap-1">
+              {[...selectedCategories].map((cat) => (
+                <span
+                  key={cat}
+                  className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS["その他イベント"]}`}
+                >
+                  {cat}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-between mb-4">
           <button onClick={prevMonth} className="px-3 py-1 rounded hover:bg-gray-100 text-lg">◀</button>

@@ -81,6 +81,19 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [panelWidth, setPanelWidth] = useState(288);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(0);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -88,8 +101,31 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
         setDropdownOpen(false);
       }
     }
+    function handleMouseMove(e: MouseEvent) {
+      if (!isDragging.current) return;
+      const delta = dragStartX.current - e.clientX;
+      setPanelWidth(Math.max(200, Math.min(600, dragStartWidth.current + delta)));
+    }
+    function handleMouseUp() { isDragging.current = false; }
+    function handleTouchMove(e: TouchEvent) {
+      if (!isDragging.current) return;
+      const delta = dragStartX.current - e.touches[0].clientX;
+      setPanelWidth(Math.max(200, Math.min(600, dragStartWidth.current + delta)));
+    }
+    function handleTouchEnd() { isDragging.current = false; }
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("touchmove", handleTouchMove);
+    document.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("touchmove", handleTouchMove);
+      document.removeEventListener("touchend", handleTouchEnd);
+    };
   }, []);
 
   function toggleCategory(cat: string) {
@@ -153,7 +189,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
+    <div className="flex flex-col lg:flex-row gap-0">
       {/* カレンダー本体 */}
       <div className="flex-1">
 
@@ -312,8 +348,26 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
         )}
       </div>
 
+      {/* リサイズハンドル（デスクトップのみ） */}
+      <div
+        className="hidden lg:flex w-3 cursor-col-resize items-center justify-center hover:bg-gray-100 group shrink-0"
+        onMouseDown={(e) => {
+          isDragging.current = true;
+          dragStartX.current = e.clientX;
+          dragStartWidth.current = panelWidth;
+          e.preventDefault();
+        }}
+        onTouchStart={(e) => {
+          isDragging.current = true;
+          dragStartX.current = e.touches[0].clientX;
+          dragStartWidth.current = panelWidth;
+        }}
+      >
+        <div className="w-0.5 h-8 bg-gray-300 rounded group-hover:bg-gray-400 transition-colors" />
+      </div>
+
       {/* 詳細パネル */}
-      <div className="w-full lg:w-72 shrink-0">
+      <div className="w-full shrink-0" style={isDesktop ? { width: panelWidth } : undefined}>
         {selected ? (
           <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 sticky top-4">
             <div className="flex items-center gap-2 flex-wrap">

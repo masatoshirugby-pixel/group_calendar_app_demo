@@ -80,10 +80,9 @@ function getLastUpdateTime(): Date {
   return today13utc;
 }
 
-/** 直前の22:00更新タイミング以降に追加されたか */
+/** 直前の22:00更新タイミング以降に追加されたか（Webも含む） */
 function isNewSinceLastUpdate(ev: ScheduleEvent): boolean {
   if (!ev.created_at) return false;
-  if (ev.source === "web") return false; // Webスクレイピングは新着扱いしない
   return new Date(ev.created_at) >= getLastUpdateTime();
 }
 

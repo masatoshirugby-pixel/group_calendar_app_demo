@@ -247,18 +247,11 @@ def run_x_for_group(
         return 0
     account = group["account"]
 
-    # since_id 方式だとツイートIDの並びにより漏れが発生するため
-    # 定期実行は時間ベース（26時間前〜）で取得。ON CONFLICT DO NOTHING で重複は無視される。
-    if start_time:
-        fetch_start_time = start_time
-    else:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=26)
-        fetch_start_time = cutoff.isoformat().replace("+00:00", "Z")
-
+    since_id = db.get_latest_post_id(account) if not start_time else None
     tweets = x_fetcher.fetch_latest_tweets(
         username=x_username,
-        since_id=None,
-        start_time=fetch_start_time,
+        since_id=since_id,
+        start_time=start_time,
         max_results=max_results,
     )
     if not tweets:

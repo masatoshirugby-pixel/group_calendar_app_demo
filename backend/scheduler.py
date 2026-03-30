@@ -5,7 +5,7 @@ cutieStreet_app/scheduler.py を全グループ対応に汎用化。
 import asyncio
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import db
 import x_fetcher
@@ -145,6 +145,11 @@ def _save_tweet_data(tweets, account: str, source: str) -> int:
         event_date_str = event_date.isoformat() if event_date else None
         venue = extract_venue(tweet.post_text)
 
+        # Webソース: 過去イベントを再挿入しない（expiry削除後の再スクレイプで誤NEW防止）
+        if source == "web" and event_date and event_date < datetime.now(timezone.utc).date():
+            logger.debug(f"[web:{account}] 過去イベントをスキップ: {tweet.post_id} event_date={event_date}")
+            continue
+
         if source != "web" and is_duplicate(
             new_text=tweet.post_text,
             new_category=judgement.category,
@@ -241,11 +246,19 @@ def run_x_for_group(
     if not x_username:
         return 0
     account = group["account"]
-    since_id = db.get_latest_post_id(account) if not start_time else None
+
+    # since_id 方式だとツイートIDの並びにより漏れが発生するため
+    # 定期実行は時間ベース（26時間前〜）で取得。ON CONFLICT DO NOTHING で重複は無視される。
+    if start_time:
+        fetch_start_time = start_time
+    else:
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=26)
+        fetch_start_time = cutoff.isoformat().replace("+00:00", "Z")
+
     tweets = x_fetcher.fetch_latest_tweets(
         username=x_username,
-        since_id=since_id,
-        start_time=start_time,
+        since_id=None,
+        start_time=fetch_start_time,
         max_results=max_results,
     )
     if not tweets:
@@ -397,7 +410,6 @@ async def run_loop() -> None:
         logger.error(f"起動時Webパイプラインエラー: {e}")
 
     while True:
-        from datetime import timedelta
         now = datetime.now(timezone.utc)
         next_run = now.replace(hour=FETCH_HOUR, minute=0, second=0, microsecond=0)
         if now >= next_run:

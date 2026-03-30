@@ -65,6 +65,7 @@ function formatPostedAt(iso: string) {
 
 function isNew(ev: ScheduleEvent): boolean {
   if (!ev.created_at) return false;
+  if (ev.source === "web") return false; // Webスクレイピングは新着扱いしない
   return Date.now() - new Date(ev.created_at).getTime() < 24 * 60 * 60 * 1000;
 }
 
@@ -82,6 +83,7 @@ function getLastUpdateTime(): Date {
 /** 直前の22:00更新タイミング以降に追加されたか */
 function isNewSinceLastUpdate(ev: ScheduleEvent): boolean {
   if (!ev.created_at) return false;
+  if (ev.source === "web") return false; // Webスクレイピングは新着扱いしない
   return new Date(ev.created_at) >= getLastUpdateTime();
 }
 

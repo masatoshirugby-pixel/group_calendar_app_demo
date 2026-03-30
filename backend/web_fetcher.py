@@ -40,22 +40,24 @@ def _fetch_soup(url: str) -> BeautifulSoup | None:
         return None
 
 
-def _next_month_url(base_url: str) -> str:
+def _month_urls(base_url: str, months_ahead: int = 5) -> list[str]:
+    """今月から months_ahead ヶ月先までのスケジュールURLリストを返す。"""
     now = datetime.now(timezone.utc)
-    if now.month == 12:
-        year, month = now.year + 1, 1
-    else:
-        year, month = now.year, now.month + 1
-    return f"{base_url}?viewMode=default&year={year}&month={month:02d}"
+    urls = []
+    for i in range(months_ahead + 1):
+        m = (now.month - 1 + i) % 12 + 1
+        y = now.year + (now.month - 1 + i) // 12
+        urls.append(f"{base_url}?viewMode=default&year={y}&month={m:02d}")
+    return urls
 
 
 def fetch_web_events(slug: str) -> list[TweetData]:
-    """公式スケジュールページから今月・翌月のイベントを取得する。"""
+    """公式スケジュールページから今月〜5ヶ月先までのイベントを取得する。"""
     base_url = f"https://{slug}.asobisystem.com/live_information/schedule/list/"
     results: list[TweetData] = []
     seen_ids: set[str] = set()
 
-    for url in [base_url, _next_month_url(base_url)]:
+    for url in _month_urls(base_url, months_ahead=5):
         soup = _fetch_soup(url)
         if not soup:
             continue

@@ -323,6 +323,45 @@ def run_deadline_backfill() -> int:
 
 
 # -----------------------------------------------------------------------
+# カテゴリ再分類
+# -----------------------------------------------------------------------
+
+def run_reclassify_categories(account: str | None = None) -> dict:
+    """
+    既存イベントのカテゴリを新しいロジックで再分類して更新する。
+    X/web 問わず全ソース対象。申込締切レコードは除外。
+    """
+    rows = db.get_all_events_for_category_reclassify(account)
+    total_checked = len(rows)
+    total_updated = 0
+
+    for row in rows:
+        post_text = row["post_text"]
+        old_category = row["category"]
+        source = row["source"]
+
+        if source == "web":
+            result = _judge_schedule(post_text)
+            new_category = result.category if result else old_category
+        else:
+            result = event_classifier.judge_tweet(post_text)
+            new_category = result.category if result.is_event else old_category
+
+        if new_category == old_category:
+            continue
+
+        if db.update_event_category(row["post_id"], new_category):
+            total_updated += 1
+            logger.info(
+                f"[reclassify-category] {row['post_id']}: "
+                f"'{old_category}' → '{new_category}'"
+            )
+
+    logger.info(f"[reclassify-category] {total_checked} 件確認 / {total_updated} 件更新")
+    return {"checked": total_checked, "updated": total_updated}
+
+
+# -----------------------------------------------------------------------
 # 開催日再分類
 # -----------------------------------------------------------------------
 

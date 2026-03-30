@@ -205,6 +205,44 @@ def get_x_events_for_reclassify(account: str) -> list[dict]:
             return [dict(row) for row in cur.fetchall()]
 
 
+def get_all_events_for_category_reclassify(account: Optional[str] = None) -> list[dict]:
+    """カテゴリ再分類用: X/web/newsイベントを全件返す（申込締切除く）"""
+    with get_conn() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            if account:
+                cur.execute(
+                    """
+                    SELECT post_id, post_text, category, source
+                    FROM events
+                    WHERE is_event = TRUE
+                      AND category != '申込締切'
+                      AND account = %s
+                    """,
+                    (account,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT post_id, post_text, category, source
+                    FROM events
+                    WHERE is_event = TRUE
+                      AND category != '申込締切'
+                    """
+                )
+            return [dict(row) for row in cur.fetchall()]
+
+
+def update_event_category(post_id: str, category: Optional[str]) -> bool:
+    """category を更新する（再分類用）"""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE events SET category = %s WHERE post_id = %s",
+                (category, post_id),
+            )
+            return cur.rowcount > 0
+
+
 def update_event_date(post_id: str, event_date: Optional[str]) -> bool:
     """event_date を更新する（再分類用）"""
     with get_conn() as conn:

@@ -101,6 +101,25 @@ async def manual_deadline_backfill():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/admin/reclassify-categories")
+async def reclassify_event_categories(
+    account: str = Query(default=None, description="対象アカウント名。省略時は全グループ対象"),
+):
+    """
+    既存イベントのカテゴリを最新ロジックで再分類する。
+    古いカテゴリ名（握手会・チェキ会など）や誤分類の修正に使う。
+    """
+    try:
+        result = await asyncio.to_thread(scheduler.run_reclassify_categories, account)
+        return {
+            "message": f"{result['checked']} 件確認、{result['updated']} 件のカテゴリを更新しました",
+            **result,
+        }
+    except Exception as e:
+        logger.error(f"/admin/reclassify-categories エラー: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/admin/reclassify")
 async def reclassify_event_dates(
     account: str = Query(default=None, description="対象アカウント名 (例: CANDY_TUNE_)。省略時は全グループ対象"),

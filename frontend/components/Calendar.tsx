@@ -7,6 +7,7 @@ import type { ScheduleEvent } from "@/lib/api";
 const CATEGORY_COLORS: Record<string, string> = {
   大特典会: "bg-amber-400 text-white",
   特典会: "bg-yellow-400 text-white",
+  一番くじ: "bg-orange-500 text-white",
   オンラインサイン会: "bg-teal-400 text-white",
   単独ライブ: "bg-pink-600 text-white",
   合同ライブ: "bg-pink-400 text-white",
@@ -19,13 +20,15 @@ const CATEGORY_COLORS: Record<string, string> = {
   その他メディア: "bg-blue-300 text-white",
   配信イベント: "bg-green-400 text-white",
   "物販・グッズ": "bg-orange-400 text-white",
+  "販売・発売": "bg-amber-600 text-white",
   その他イベント: "bg-gray-400 text-white",
   申込締切: "bg-red-500 text-white",
 };
 
+// 絞り込みカテゴリ（大特典会は特典会に統合、一番くじを追加）
 const FILTER_CATEGORIES = [
   "単独ライブ", "ライブ", "合同ライブ", "フェス出演",
-  "大特典会", "特典会", "オンラインサイン会", "リリースイベント",
+  "特典会", "一番くじ", "オンラインサイン会", "リリースイベント",
   "テレビ出演", "ラジオ出演", "雑誌掲載", "その他メディア",
   "配信イベント", "物販・グッズ", "その他イベント", "申込締切",
 ];
@@ -65,11 +68,43 @@ function isNew(ev: ScheduleEvent): boolean {
   return Date.now() - new Date(ev.created_at).getTime() < 24 * 60 * 60 * 1000;
 }
 
+/** 直前の JST 22:00（UTC 13:00）を返す */
+function getLastUpdateTime(): Date {
+  const now = new Date();
+  const today13utc = new Date(Date.UTC(
+    now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 13, 0, 0, 0
+  ));
+  if (now >= today13utc) return today13utc;
+  today13utc.setUTCDate(today13utc.getUTCDate() - 1);
+  return today13utc;
+}
+
+/** 直前の22:00更新タイミング以降に追加されたか */
+function isNewSinceLastUpdate(ev: ScheduleEvent): boolean {
+  if (!ev.created_at) return false;
+  return new Date(ev.created_at) >= getLastUpdateTime();
+}
+
 function daysUntil(dateStr: string): number {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const target = new Date(dateStr + "T00:00:00");
   return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** 申込締切レコードから親イベントを特定 */
+function getParentEvent(ev: ScheduleEvent, allEvents: ScheduleEvent[]): ScheduleEvent | null {
+  if (ev.category !== "申込締切") return null;
+  const parentId = ev.post_id.replace(/_deadline.*$/, "");
+  return allEvents.find((e) => e.post_id === parentId) ?? null;
+}
+
+/** イベントに紐づく申込締切レコードを全件取得 */
+function getRelatedDeadlines(ev: ScheduleEvent, allEvents: ScheduleEvent[]): ScheduleEvent[] {
+  if (ev.category === "申込締切") return [];
+  return allEvents.filter(
+    (e) => e.category === "申込締切" && e.post_id.startsWith(ev.post_id + "_deadline")
+  );
 }
 
 export default function Calendar({ events }: { events: ScheduleEvent[] }) {
@@ -79,6 +114,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
   const [selected, setSelected] = useState<ScheduleEvent | null>(null);
   const [undatedOpen, setUndatedOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [showOnlyNew, setShowOnlyNew] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(288);
@@ -139,19 +175,23 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
 
   const isFiltered = selectedCategories.size > 0;
 
-  // 絞り込み後のイベント
+  // 22:00以降の新規のみフィルター
+  const newFilteredEvents = showOnlyNew ? events.filter(isNewSinceLastUpdate) : events;
+
+  // カテゴリ絞り込み（特典会は大特典会も包含）
   const displayEvents = isFiltered
-    ? events.filter((e) => {
-        if (selectedCategories.has(e.category ?? "")) return true;
-        // 申込締切が選択されている場合、その親イベントも表示
-        if (selectedCategories.has("申込締切") && e.category !== "申込締切") {
+    ? newFilteredEvents.filter((e) => {
+        const cat = e.category ?? "";
+        if (selectedCategories.has("特典会") && (cat === "特典会" || cat === "大特典会")) return true;
+        if (selectedCategories.has(cat)) return true;
+        if (selectedCategories.has("申込締切") && cat !== "申込締切") {
           return events.some(
             (d) => d.category === "申込締切" && d.post_id.startsWith(e.post_id + "_deadline")
           );
         }
         return false;
       })
-    : events;
+    : newFilteredEvents;
 
   // 申込締切が7日以内に迫っているイベント
   const upcomingDeadlines = events
@@ -188,6 +228,22 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
     setSelected(null);
   }
 
+  // 詳細パネル用
+  const relatedDeadlines = selected ? getRelatedDeadlines(selected, events) : [];
+  const parentEvent = selected ? getParentEvent(selected, events) : null;
+
+  // 直前22:00の表示用ラベル
+  const lastUpdateLabel = (() => {
+    const t = getLastUpdateTime();
+    return t.toLocaleString("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      month: "numeric",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  })();
+
   return (
     <div className="flex flex-col lg:flex-row gap-0">
       {/* カレンダー本体 */}
@@ -214,6 +270,24 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
           </div>
         )}
 
+        {/* 22:00以降の新規のみ表示チェックボックス */}
+        <label className="flex items-center gap-2 mb-3 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showOnlyNew}
+            onChange={(e) => setShowOnlyNew(e.target.checked)}
+            className="w-4 h-4 accent-blue-500 rounded"
+          />
+          <span className="text-xs text-gray-600 font-medium">
+            前回22:00（{lastUpdateLabel}）以降の新着のみ表示
+          </span>
+          {showOnlyNew && (
+            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">
+              {newFilteredEvents.length}件
+            </span>
+          )}
+        </label>
+
         {/* 絞り込みUI */}
         <div className="flex items-center gap-2 mb-3 flex-wrap" ref={dropdownRef}>
           <div className="relative">
@@ -235,10 +309,11 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
             </button>
 
             {dropdownOpen && (
-              <div className="absolute left-0 top-9 z-50 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-hidden">
+              <div className="absolute left-0 top-9 z-50 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1 overflow-hidden">
                 {FILTER_CATEGORIES.map((cat) => {
                   const checked = selectedCategories.has(cat);
                   const colorClass = (CATEGORY_COLORS[cat] ?? CATEGORY_COLORS["その他イベント"]).split(" ")[0];
+                  const label = cat === "特典会" ? "特典会／大特典会" : cat;
                   return (
                     <label key={cat} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
                       <input
@@ -248,7 +323,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                         className="w-3.5 h-3.5 accent-gray-700"
                       />
                       <span className={`inline-block w-2 h-2 rounded-full ${colorClass}`} />
-                      <span className="text-xs text-gray-700">{cat}</span>
+                      <span className="text-xs text-gray-700">{label}</span>
                     </label>
                   );
                 })}
@@ -272,7 +347,7 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                   key={cat}
                   className={`text-xs px-2 py-0.5 rounded-full font-medium ${CATEGORY_COLORS[cat] ?? CATEGORY_COLORS["その他イベント"]}`}
                 >
-                  {cat}
+                  {cat === "特典会" ? "特典会／大特典会" : cat}
                 </span>
               ))}
             </div>
@@ -388,6 +463,43 @@ export default function Calendar({ events }: { events: ScheduleEvent[] }) {
                 投稿日時: {formatPostedAt(selected.posted_at)}
               </p>
             )}
+
+            {/* 申込締切レコードの場合: 対応する親イベントを表示 */}
+            {selected.category === "申込締切" && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                <p className="text-xs font-semibold text-blue-700 mb-1.5">対応イベント</p>
+                {parentEvent ? (
+                  <button
+                    onClick={() => setSelected(parentEvent)}
+                    className={`text-left w-full text-xs px-2 py-1.5 rounded font-medium ${CATEGORY_COLORS[parentEvent.category] ?? CATEGORY_COLORS["その他イベント"]}`}
+                  >
+                    {parentEvent.category}
+                    {parentEvent.event_date && ` — ${formatEventDate(parentEvent.event_date)}`}
+                  </button>
+                ) : (
+                  <p className="text-xs text-gray-400">（対応イベントが見つかりません）</p>
+                )}
+              </div>
+            )}
+
+            {/* 申込締切以外のイベントで締切レコードがある場合: 申込締切日を表示 */}
+            {relatedDeadlines.length > 0 && (
+              <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-100">
+                <p className="text-xs font-semibold text-red-700 mb-1.5">申込締切</p>
+                <div className="flex flex-col gap-1">
+                  {relatedDeadlines.map((dl) => (
+                    <button
+                      key={dl.post_id}
+                      onClick={() => setSelected(dl)}
+                      className="text-left text-xs px-2 py-1.5 rounded bg-red-500 text-white hover:bg-red-600 transition-colors"
+                    >
+                      {dl.event_date ? formatEventDate(dl.event_date) : "日程未定"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {selected.image_url && (
               <div className="mt-3 relative w-full aspect-video rounded-lg overflow-hidden">
                 <Image

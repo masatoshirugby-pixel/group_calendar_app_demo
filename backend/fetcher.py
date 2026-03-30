@@ -91,16 +91,21 @@ def _judge_category(post_text: str) -> str | None:
             return "合同ライブ"
         return "ライブ"
     if type_str == "TV":
+        # [TV]タグでも雑誌掲載キーワードがあれば雑誌掲載に優先分類
+        if any(kw in post_text for kw in ["雑誌", "掲載", "グラビア", "表紙", "誌面"]):
+            return "雑誌掲載"
         return "テレビ出演"
     if type_str == "RADIO":
         return "ラジオ出演"
     if "大特典会" in post_text:
         return "大特典会"
+    if any(kw in post_text for kw in ["一番くじ", "いちばんくじ", "生誕くじ", "一番賞"]):
+        return "一番くじ"
     if any(kw in post_text for kw in ["オンラインサイン会", "オンラインサイン"]):
         return "オンラインサイン会"
     if any(kw in post_text for kw in ["リリースイベント", "リリイベ", "発売記念", "インストア"]):
         return "リリースイベント"
-    if any(kw in post_text for kw in ["特典会", "チェキ", "お渡し", "ハイタッチ", "サイン会"]):
+    if any(kw in post_text for kw in ["特典会", "チェキ", "お渡し", "ハイタッチ", "サイン会", "握手会"]):
         return "特典会"
     if any(kw.lower() in post_text.lower() for kw in ["フェス", "フェスティバル", "festival"]):
         return "フェス出演"

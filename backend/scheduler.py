@@ -54,17 +54,22 @@ def _judge_schedule(post_text: str) -> JudgementResult | None:
         return JudgementResult(is_event=True, category="ライブ")
 
     if type_str == "TV":
+        # [TV]タグでも雑誌掲載キーワードがあれば雑誌掲載に優先分類
+        if any(kw in post_text for kw in ["雑誌", "掲載", "グラビア", "表紙", "誌面"]):
+            return JudgementResult(is_event=True, category="雑誌掲載")
         return JudgementResult(is_event=True, category="テレビ出演")
     if type_str == "RADIO":
         return JudgementResult(is_event=True, category="ラジオ出演")
 
     if "大特典会" in post_text:
         return JudgementResult(is_event=True, category="大特典会")
+    if any(kw in post_text for kw in ["一番くじ", "いちばんくじ", "生誕くじ", "一番賞"]):
+        return JudgementResult(is_event=True, category="一番くじ")
     if any(kw in post_text for kw in ["オンラインサイン会", "オンラインサイン"]):
         return JudgementResult(is_event=True, category="オンラインサイン会")
     if any(kw in post_text for kw in ["リリースイベント", "リリイベ", "発売記念", "インストア"]):
         return JudgementResult(is_event=True, category="リリースイベント")
-    if any(kw in post_text for kw in ["特典会", "チェキ", "お渡し", "ハイタッチ", "サイン会"]):
+    if any(kw in post_text for kw in ["特典会", "チェキ", "お渡し", "ハイタッチ", "サイン会", "握手会"]):
         return JudgementResult(is_event=True, category="特典会")
     if any(kw.lower() in post_text.lower() for kw in ["フェス", "フェスティバル", "festival"]):
         return JudgementResult(is_event=True, category="フェス出演")

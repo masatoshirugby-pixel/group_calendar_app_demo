@@ -22,7 +22,10 @@ _user_id_cache: dict[str, str] = {}
 def _get_client() -> tweepy.Client:
     global _client
     if _client is None:
-        _client = tweepy.Client(bearer_token=BEARER_TOKEN, wait_on_rate_limit=False, timeout=30)
+        _client = tweepy.Client(bearer_token=BEARER_TOKEN, wait_on_rate_limit=False)
+        # tweepy は timeout を直接受け取れないためセッションにパッチ
+        _orig = _client.session.request
+        _client.session.request = lambda *args, **kw: _orig(*args, **{"timeout": 30, **kw})
     return _client
 
 

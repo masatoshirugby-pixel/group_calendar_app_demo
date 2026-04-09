@@ -22,7 +22,7 @@ _user_id_cache: dict[str, str] = {}
 def _get_client() -> tweepy.Client:
     global _client
     if _client is None:
-        _client = tweepy.Client(bearer_token=BEARER_TOKEN, wait_on_rate_limit=False)
+        _client = tweepy.Client(bearer_token=BEARER_TOKEN, wait_on_rate_limit=False, timeout=30)
     return _client
 
 

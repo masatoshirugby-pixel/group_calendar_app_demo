@@ -240,7 +240,8 @@ def run_web_for_group(group: dict) -> int:
 def run_x_for_group(
     group: dict,
     start_time: str | None = None,
-    max_results: int = 10,
+    end_time: str | None = None,  # テスト用（通常運用では不要）
+    max_results: int = 100,
 ) -> int:
     x_username = group.get("x_username")
     if not x_username:
@@ -252,6 +253,7 @@ def run_x_for_group(
         username=x_username,
         since_id=since_id,
         start_time=start_time,
+        end_time=end_time,  # テスト用（通常運用では不要）
         max_results=max_results,
     )
     if not tweets:
@@ -416,13 +418,14 @@ def run_web_pipeline() -> int:
 
 def run_pipeline(
     start_time: str | None = None,
-    max_results: int = 10,
+    end_time: str | None = None,  # テスト用（通常運用では不要）
+    max_results: int = 100,
 ) -> int:
     """Web + X のフルパイプライン。全グループ対象。"""
     total = 0
     for group in GROUPS:
         total += run_web_for_group(group)
-        total += run_x_for_group(group, start_time=start_time, max_results=max_results)
+        total += run_x_for_group(group, start_time=start_time, end_time=end_time, max_results=max_results)
 
     deleted = db.delete_expired_events()
     if deleted:

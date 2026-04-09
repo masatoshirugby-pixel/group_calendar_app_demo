@@ -59,7 +59,8 @@ def fetch_latest_tweets(
     username: str,
     since_id: Optional[str] = None,
     start_time: Optional[str] = None,
-    max_results: int = 10,
+    end_time: Optional[str] = None,  # テスト用（通常運用では不要）
+    max_results: int = 100,
 ) -> list[TweetData]:
     user_id = get_user_id(username)
     if not user_id:
@@ -77,6 +78,7 @@ def fetch_latest_tweets(
                 max_results=max(5, min(max_results, 100)),
                 since_id=since_id,
                 start_time=start_time,
+                end_time=end_time,  # テスト用（通常運用では不要）
                 pagination_token=next_token,
                 tweet_fields=["created_at", "text", "attachments"],
                 media_fields=["url", "preview_image_url"],

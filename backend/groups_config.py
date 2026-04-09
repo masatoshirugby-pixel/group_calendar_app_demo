@@ -23,42 +23,6 @@ GROUPS: list[dict] = [
         "account":    "SWEET_STEADY",
         "x_username": "SWEET_STEADY",
     },
-    {
-        "slug":       "wasuta",
-        "name":       "わーすた",
-        "account":    "wasuta",
-        "x_username": None,
-    },
-    {
-        "slug":       "ukka",
-        "name":       "ukka",
-        "account":    "ukka",
-        "x_username": None,
-    },
-    {
-        "slug":       "bromance",
-        "name":       "BROMAnce",
-        "account":    "bromance",
-        "x_username": None,
-    },
-    {
-        "slug":       "ocha-norma",
-        "name":       "OCHA NORMA",
-        "account":    "ocha-norma",
-        "x_username": None,
-    },
-    {
-        "slug":       "fruits-zipper",
-        "name":       "FRUITS ZIPPER",
-        "account":    "fruits-zipper",
-        "x_username": None,
-    },
-    {
-        "slug":       "poipoipoizon",
-        "name":       "ぽいずん",
-        "account":    "poipoipoizon",
-        "x_username": None,
-    },
 ]
 
 # フロントエンド向けのグループ一覧（slug + name のみ）
